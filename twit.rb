@@ -5,41 +5,131 @@ require 'open-uri' # what's this for?
 require 'json'
 require 'oauth'
 require './secrets.rb'
+require 'launchy'
+require 'yaml'
 
-
+CONSUMER = OAuth::Consumer.new(
+CONSUMER_KEY, CONSUMER_SECRET, :site => "https://twitter.com")
 
 
 class User
-  def authenticate
+  def initialize(username)
+    @username = username
+  end
+
+  def statuses(count = 10)
     url = Addressable::URI.new(
        :scheme => "https",
-       :host => "twitter.com",
-       :path => "oauth/request_token"
-       # :query_values => {:address => my_location,
-#          :sensor => true
-       # }
-     ).to_s
+       :host => "api.twitter.com",
+       :path => "1.1/statuses/user_timeline.json",
+       :query_values => { :count => count}
 
-    response = JSON.parse(RestClient.get(url))
-    p response
+    ).to_s
+    response = JSON.parse(EndUser::access_token.get(url).body)
+    puts "#{@username} statuses:\n\n"
+    response.each do |message|
+      p message['text']
+    end
+    puts "\n\n"
+  end
+end
+
+
+class EndUser < User
+  @@access_token = nil
+
+  def self.access_token
+    @@access_token
   end
 
-  def dm
+  def self.login(username)
+    # get_token.
+    @@current_user = username
+    # later, check if username matches file
+    @@access_token = self.get_token('twit_token')
+
   end
-  # able to call user.statuses
+
+  def timeline
+    url = Addressable::URI.new(
+       :scheme => "https",
+       :host => "api.twitter.com",
+       :path => "1.1/statuses/home_timeline.json",
+       :query_values => {:count => 20 }
+    ).to_s
+    response = JSON.parse(EndUser::access_token.get(url).body)
+
+    puts "#{@username} timeline:\n\n"
+    response.each do |message|
+      Status.new(message['user']['screen_name'], message['text']).show
+
+    end
+    puts "\n\n"
+
+  end
+
+  def dm(target_user, message)
+    url = Addressable::URI.new(
+       :scheme => "https",
+       :host => "api.twitter.com",
+       :path => "1.1/direct_messages/new.json",
+       :query_values => {:text => message,
+         :screen_name => target_user
+       }
+    ).to_s
+    response = JSON.parse(EndUser::access_token.post(url).body)
+    puts "DM sent to #{target_user}:"
+    puts "Message:\n#{message}"
+  end
+
+  def tweet(message)
+  end
+
+  private
+
+  def self.request_access_token
+    request_token = CONSUMER.get_request_token
+    authorize_url = request_token.authorize_url
+    puts "Go to this URL: #{authorize_url}"
+    Launchy.open(authorize_url)
+
+    puts "Login, and type your verification code in"
+    oauth_verifier = gets.chomp
+    access_token = request_token.get_access_token(
+        :oauth_verifier => oauth_verifier)
+    access_token
+  end
+
+  def self.get_token(token_file)
+    if File.exist?(token_file)
+      File.open(token_file) { |f| YAML.load(f) }
+    else
+      access_token = self.request_access_token
+      File.open(token_file, "w") { |f| YAML.dump(access_token, f) }
+
+      access_token
+    end
+  end
 end
 
 class Status
+  attr_reader :user
   # able to call status.user
+  def initialize(user, status_message)
+    @user = user
+    @status_message = status_message
+  end
+
+  def show
+    puts "User: #{@user}".ljust(25) + @status_message
+  end
 end
 
-class DM
+EndUser::login('Rich_Wallett')
+user = EndUser.new('Rich_Wallett')
+user.timeline
+#user.statuses('Uberfacts')
+#user.dm('kdavh', 'Test23')
 
-end
 
-class Tweets
-
-end
-
-u = User.new
-u.authenticate
+#p EndUser::access_token.get("http://api.twitter.com/1.1/statuses/user_timeline.json").body
