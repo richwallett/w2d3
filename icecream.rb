@@ -95,7 +95,7 @@ def print_directions(places_array, directions_array)
 end
 
 
-
+#REV: Maybe make this into a method? 
 lat_lng = get_geolocation(my_location)
 places_array = get_places(:location=> lat_lng)
 directions_array = get_directions(my_location, places_array)

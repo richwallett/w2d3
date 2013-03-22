@@ -2,11 +2,16 @@ require 'addressable/uri'
 require 'rest-client'
 require 'nokogiri'
 require 'open-uri' # what's this for?
+#REV: Open-URI allows you to open web pages as if they were files
+#Its not particuarly needed for this exercise. But can be used.
 require 'json'
 require 'oauth'
 require './secrets.rb'
 require 'launchy'
 require 'yaml'
+
+#REV: You pushed your token file up to github. You might want
+#to add that to .gitignore
 
 CONSUMER = OAuth::Consumer.new(
 CONSUMER_KEY, CONSUMER_SECRET, :site => "https://twitter.com")
@@ -31,6 +36,8 @@ class User
     puts "#{username} statuses:\n\n"
     response.each do |message|
       Status.new(message['user']['screen_name'], message['text']).show
+      #REV: Nice work in turning statuses from the JSON into 
+      #Objects. 
     end
   end
 
