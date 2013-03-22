@@ -11,45 +11,42 @@ require 'yaml'
 CONSUMER = OAuth::Consumer.new(
 CONSUMER_KEY, CONSUMER_SECRET, :site => "https://twitter.com")
 
-
 class User
   def initialize(username)
     @username = username
   end
 
-  def self.other_statuses(username)
-    url = Addressable::URI.new(
-       :scheme => "https",
-       :host => "api.twitter.com",
-       :path => "1.1/statuses/user_timeline.json",
-       :query_values => { :count => 20,
-         :screen_name => username
-       }
+  def self.statuses_of(username)
+    url = User.prep_url('statuses/user_timeline',
+      {count: 15, screen_name: username})
+    self.show( JSON.parse(EndUser::access_token.get(url).body) )
+  end
 
-    ).to_s
-    response = JSON.parse(EndUser::access_token.get(url).body)
-    puts "#{username} statuses:\n\n"
-    response.each do |message|
-      Status.new(message['user']['screen_name'], message['text']).show
+  def statuses
+    url = User.prep_url('statuses/user_timeline', {count: 15})
+    User.show( JSON.parse(EndUser::access_token.get(url).body) )
+  end
+
+  protected
+
+  def self.show(response)
+    if response[0]
+      puts "#{response[0]['user']['screen_name']} statuses:\n\n"
+      response.each do |message|
+        Status.new(message['user']['screen_name'], message['text']).show
+      end
     end
   end
 
-  def statuses(count = 10)
+  def self.prep_url(path, query_val_hash)
     url = Addressable::URI.new(
        :scheme => "https",
        :host => "api.twitter.com",
-       :path => "1.1/statuses/user_timeline.json",
-       :query_values => { :count => count}
-
+       :path => "1.1/#{path}.json",
+       :query_values => query_val_hash
     ).to_s
-    response = JSON.parse(EndUser::access_token.get(url).body)
-    puts "#{@username} statuses:\n\n"
-    response.each do |message|
-      Status.new(message['user']['screen_name'], message['text']).show
-    end
   end
 end
-
 
 class EndUser < User
   @@access_token = nil
@@ -67,45 +64,22 @@ class EndUser < User
   end
 
   def timeline
-    url = Addressable::URI.new(
-       :scheme => "https",
-       :host => "api.twitter.com",
-       :path => "1.1/statuses/home_timeline.json",
-       :query_values => {:count => 20 }
-    ).to_s
-    response = JSON.parse(EndUser::access_token.get(url).body)
-
-    puts "#{@username} timeline:\n\n"
-    response.each do |message|
-      Status.new(message['user']['screen_name'], message['text']).show
-    end
-    puts "\n\n"
-
+    url = User.prep_url('statuses/home_timeline', {count: 20})
+    User.show( JSON.parse(EndUser::access_token.get(url).body) )
   end
 
   def dm(target_user, message)
-    url = Addressable::URI.new(
-       :scheme => "https",
-       :host => "api.twitter.com",
-       :path => "1.1/direct_messages/new.json",
-       :query_values => {:text => message,
-         :screen_name => target_user
-       }
-    ).to_s
+    url = User.prep_url('direct_messages/new',
+      {text: message, screen_name: target_user})
+
     response = JSON.parse(EndUser::access_token.post(url).body)
-    puts "DM sent to #{target_user}:"
-    puts "Message:\n#{response['text']}"
+    inform_of(response, target_user)
   end
 
   def tweet(message)
-    url = Addressable::URI.new(
-       :scheme => "https",
-       :host => "api.twitter.com",
-       :path => "1.1/statuses/update.json",
-       :query_values => {:status => message}
-    ).to_s
+    url = User.prep_url('statuses/update', {status: message} )
     response = JSON.parse(EndUser::access_token.post(url).body)
-    puts "Tweet:\n#{response['text']}"
+    inform_of(response)
   end
 
   private
@@ -133,6 +107,15 @@ class EndUser < User
       access_token
     end
   end
+
+  def inform_of(response, target_user = nil)
+    if response['text'].nil?
+      puts response['errors'][0]['message']
+    else
+      target_user ? puts("DM to #{target_user}") : puts("Tweet")
+      puts "Sent:\n#{response['text']}"
+    end
+  end
 end
 
 class Status
@@ -149,12 +132,9 @@ class Status
 end
 
 EndUser::login('Rich_Wallett')
-user = EndUser.new('Rich_Wallett')
-#user.tweet('Test tweet from TWIT by @kdavh and @rich_wallett.  #AppAcademy #Ruby #Hashtags')
-#user.timeline
-#user.statuses
-#user.dm('kdavh', 'Test23')
-User.other_statuses('kdavh')
-
-
-#p EndUser::access_token.get("http://api.twitter.com/1.1/statuses/user_timeline.json").body
+user = EndUser.new('Rich_Wallett') #Ruby #Hashtags')
+user.timeline
+# user.statuses
+# User.statuses_of('kdavh')
+# user.tweet("Test tweet from TWIT 2. @kdavh @rich_wallet")
+# user.dm('kdavh', 'test DM from TWIT, again, and once more...')
